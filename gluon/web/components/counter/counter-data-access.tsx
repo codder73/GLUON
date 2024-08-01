@@ -3,13 +3,20 @@
 import { getCounterProgram, getCounterProgramId } from '@gluon/anchor';
 import { Program } from '@coral-xyz/anchor';
 import { useConnection } from '@solana/wallet-adapter-react';
-import { Cluster, Keypair, PublicKey } from '@solana/web3.js';
+import { Cluster, PublicKey } from '@solana/web3.js';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useMemo } from 'react';
 import toast from 'react-hot-toast';
 import { useCluster } from '../cluster/cluster-data-access';
 import { useAnchorProvider } from '../solana/solana-provider';
 import { useTransactionToast } from '../ui/ui-layout';
+
+
+interface EntryArgs{
+  owner: PublicKey,
+  title:String,
+  message: String,
+};
 
 export function useCounterProgram() {
   const { connection } = useConnection();
@@ -24,7 +31,7 @@ export function useCounterProgram() {
 
   const accounts = useQuery({
     queryKey: ['counter', 'all', { cluster }],
-    queryFn: () => program.account.counter.all(),
+    queryFn: () => program.account.journalEntryState.all(),
   });
 
   const getProgramAccount = useQuery({
@@ -32,85 +39,74 @@ export function useCounterProgram() {
     queryFn: () => connection.getParsedAccountInfo(programId),
   });
 
-  const initialize = useMutation({
-    mutationKey: ['counter', 'initialize', { cluster }],
-    mutationFn: (keypair: Keypair) =>
-      program.methods
-        .initialize()
-        .accounts({ counter: keypair.publicKey })
-        .signers([keypair])
-        .rpc(),
-    onSuccess: (signature) => {
-      transactionToast(signature);
-      return accounts.refetch();
-    },
-    onError: () => toast.error('Failed to initialize account'),
-  });
+  const createEntry = useMutation<string, Error, EntryArgs>({
+    mutationKey: ['counter', 'create', { cluster }],
+    mutationFn: async ({title, message, owner}) =>{
+      const [CounterEntryAddress] = await PublicKey.findProgramAddress(
+        [Buffer.from(title), owner.toBuffer()],
+        programId,
+      );
+
+      return program.methods.createEntry(title, message).accounts({counterEntry: CounterEntryAddress}).rpc();
+  },
+  onSuccess: signature => {
+    transactionToast(signature);
+    return accounts.refetch();
+  },
+  onError: () => toast.error(`Failed to create journal entry: ${error.message}`),
+});
 
   return {
     program,
     programId,
     accounts,
     getProgramAccount,
-    initialize,
+    createEntry,
   };
 }
 
 export function useCounterProgramAccount({ account }: { account: PublicKey }) {
   const { cluster } = useCluster();
   const transactionToast = useTransactionToast();
-  const { program, accounts } = useCounterProgram();
+  const { programId, program ,  accounts } = useCounterProgram();
 
   const accountQuery = useQuery({
     queryKey: ['counter', 'fetch', { cluster, account }],
-    queryFn: () => program.account.counter.fetch(account),
+    queryFn: () => program.account.journalEntryState.fetch(account),
   });
 
-  const closeMutation = useMutation({
-    mutationKey: ['counter', 'close', { cluster, account }],
-    mutationFn: () =>
-      program.methods.close().accounts({ counter: account }).rpc(),
+  const updateEntry = useMutation<string, Error, EntryArgs>({
+    mutationKey: ["journalEntry", "update", { cluster }],
+    mutationFn: async ({ title, message, owner }) => {
+      const [journalEntryAddress] = await PublicKey.findProgramAddress(
+        [Buffer.from(title), owner.toBuffer()],
+        programId,
+      );
+   
+      return program.methods.updateJournalEntry(title, message).accounts({journalEntry: journalEntryAddress,}).rpc();
+    },
+    onSuccess: signature => {
+      transactionToast(signature);
+      accounts.refetch();
+    },
+    onError: error => {
+      toast.error(`Failed to update journal entry: ${error.message}`);
+    },
+  });
+   
+  const deleteEntry = useMutation({
+    mutationKey: ['counter', 'delete', { cluster, account }],
+    mutationFn: ( title: string ) =>
+      program.methods.deleteEntry(title).accounts({ counterEntry: account }).rpc(),
     onSuccess: (tx) => {
       transactionToast(tx);
       return accounts.refetch();
     },
   });
 
-  const decrementMutation = useMutation({
-    mutationKey: ['counter', 'decrement', { cluster, account }],
-    mutationFn: () =>
-      program.methods.decrement().accounts({ counter: account }).rpc(),
-    onSuccess: (tx) => {
-      transactionToast(tx);
-      return accountQuery.refetch();
-    },
-  });
-
-  const incrementMutation = useMutation({
-    mutationKey: ['counter', 'increment', { cluster, account }],
-    mutationFn: () =>
-      program.methods.increment().accounts({ counter: account }).rpc(),
-    onSuccess: (tx) => {
-      transactionToast(tx);
-      return accountQuery.refetch();
-    },
-  });
-
-  const setMutation = useMutation({
-    mutationKey: ['counter', 'set', { cluster, account }],
-    mutationFn: (value: number) =>
-      program.methods.set(value).accounts({ counter: account }).rpc(),
-    onSuccess: (tx) => {
-      transactionToast(tx);
-      return accountQuery.refetch();
-    },
-  });
-
   return {
     accountQuery,
-    closeMutation,
-    decrementMutation,
-    incrementMutation,
-    setMutation,
+    updateEntry,
+    deleteEntry,
   };
 }

@@ -1,25 +1,64 @@
 'use client';
 
-import { Keypair, PublicKey } from '@solana/web3.js';
-import { useMemo } from 'react';
+import { PublicKey } from '@solana/web3.js';
+import { useState } from 'react';
 import { ellipsify } from '../ui/ui-layout';
 import { ExplorerLink } from '../cluster/cluster-ui';
 import {
   useCounterProgram,
   useCounterProgramAccount,
 } from './counter-data-access';
+import { useWallet } from '@solana/wallet-adapter-react';
+
 
 export function CounterCreate() {
-  const { initialize } = useCounterProgram();
+  const { createEntry } = useCounterProgram();
+  const { publicKey } = useWallet();
+  const [title, setTitle] = useState("");
+  const [message, setMessage] = useState("");
+
+  // Using LLM here--
+  const isFormValid = title.trim() !== "" && message.trim() !== "";
+
+  const handleSubmit = () => {
+    if (publicKey && isFormValid) {
+      createEntry.mutateAsync({ title, message, owner: publicKey });
+    }
+  };
+
+  if (!publicKey) {
+    return <p> Connect your wallet! </p>;
+  }
 
   return (
+    <div className='flex flex-col justify-center w-1/2 py-2 '>
+      <div>
+        <input
+        type="text"
+        placeholder="Title"
+        value={title}
+        onChange={e => setTitle(e.target.value)}
+        className="input input-bordered w-full max-w-xs py-6"
+      />
+      </div>
+      <div>
+      <textarea
+        placeholder="Message"
+        value={message}
+        onChange={e => setMessage(e.target.value)}
+        className="textarea textarea-bordered w-full max-w-xs py-6"
+      />
+      </div>
+      <div>
     <button
-      className="btn btn-xs lg:btn-md btn-primary"
-      onClick={() => initialize.mutateAsync(Keypair.generate())}
-      disabled={initialize.isPending}
-    >
-      Create {initialize.isPending && '...'}
+      className="btn btn-xs lg:btn-md bg-teal-800 btn-primary "
+      onClick={handleSubmit}
+      disabled={createEntry.isPending || !isFormValid}
+      >
+      Create {createEntry.isPending && '...'}
     </button>
+      </div>
+      </div>
   );
 }
 
@@ -40,7 +79,7 @@ export function CounterList() {
     );
   }
   return (
-    <div className={'space-y-6'}>
+    <div className='space-y-6 justify-center align-middle'>
       {accounts.isLoading ? (
         <span className="loading loading-spinner loading-lg"></span>
       ) : accounts.data?.length ? (
@@ -65,16 +104,25 @@ export function CounterList() {
 function CounterCard({ account }: { account: PublicKey }) {
   const {
     accountQuery,
-    incrementMutation,
-    setMutation,
-    decrementMutation,
-    closeMutation,
+    updateEntry,
+    deleteEntry,
   } = useCounterProgramAccount({ account });
 
-  const count = useMemo(
-    () => accountQuery.data?.count ?? 0,
-    [accountQuery.data?.count]
-  );
+  const { publicKey } = useWallet();
+  const [message, setMessage] = useState("");
+  const title = accountQuery.data?.title;
+
+  const isFormValid = message.trim() !== "";
+
+  const handleSubmit = () => {
+    if (publicKey && isFormValid && title) {
+      updateEntry.mutateAsync({ title, message, owner: publicKey });
+    }
+  };
+
+  if (!publicKey) {
+    return <p> Connect your wallet! </p>;
+  };
 
   return accountQuery.isLoading ? (
     <span className="loading loading-spinner loading-lg"></span>
@@ -86,44 +134,27 @@ function CounterCard({ account }: { account: PublicKey }) {
             className="card-title justify-center text-3xl cursor-pointer"
             onClick={() => accountQuery.refetch()}
           >
-            {count}
+            {accountQuery.data?.title}
           </h2>
+          <p>
+            {accountQuery.data?.message}
+          </p>
           <div className="card-actions justify-around">
-            <button
-              className="btn btn-xs lg:btn-md btn-outline"
-              onClick={() => incrementMutation.mutateAsync()}
-              disabled={incrementMutation.isPending}
+          <textarea
+              placeholder="New Message"
+              value={message}
+              onChange={e => setMessage(e.target.value)}
+              className="textarea textarea-bordered w-full max-w-xs"
+            />
+          <button
+            className="btn btn-xs lg:btn-md btn-primary"
+            onClick={handleSubmit}
+            disabled={updateEntry.isPending || !isFormValid}
             >
-              Increment
-            </button>
-            <button
-              className="btn btn-xs lg:btn-md btn-outline"
-              onClick={() => {
-                const value = window.prompt(
-                  'Set value to:',
-                  count.toString() ?? '0'
-                );
-                if (
-                  !value ||
-                  parseInt(value) === count ||
-                  isNaN(parseInt(value))
-                ) {
-                  return;
-                }
-                return setMutation.mutateAsync(parseInt(value));
-              }}
-              disabled={setMutation.isPending}
-            >
-              Set
-            </button>
-            <button
-              className="btn btn-xs lg:btn-md btn-outline"
-              onClick={() => decrementMutation.mutateAsync()}
-              disabled={decrementMutation.isPending}
-            >
-              Decrement
-            </button>
+          Update Entry {updateEntry.isPending && '...'}
+    </button>
           </div>
+
           <div className="text-center space-y-4">
             <p>
               <ExplorerLink
@@ -141,11 +172,14 @@ function CounterCard({ account }: { account: PublicKey }) {
                 ) {
                   return;
                 }
-                return closeMutation.mutateAsync();
+                const title = accountQuery.data?.title;
+                if (title) {
+                  return deleteEntry.mutateAsync( title );
+                }
               }}
-              disabled={closeMutation.isPending}
+              disabled={deleteEntry.isPending}
             >
-              Close
+              Delete
             </button>
           </div>
         </div>
