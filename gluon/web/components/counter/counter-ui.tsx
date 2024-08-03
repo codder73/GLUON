@@ -31,8 +31,8 @@ export function CounterCreate() {
   }
 
   return (
-    <div className='flex flex-col justify-center w-1/2 py-2 '>
-      <div>
+    <div className='flex flex-col justify-center w-full  bg-opacity-100 backdrop-filter backdrop-blur-lg p-6 rounded-lg shadow-lg py-5'>
+      <div className='p-5'>
         <input
         type="text"
         placeholder="Title"
@@ -79,7 +79,7 @@ export function CounterList() {
     );
   }
   return (
-    <div className='space-y-6 justify-center align-middle'>
+    <div className='space-y-6 justify-center align-middle py-5'>
       {accounts.isLoading ? (
         <span className="loading loading-spinner loading-lg"></span>
       ) : accounts.data?.length ? (

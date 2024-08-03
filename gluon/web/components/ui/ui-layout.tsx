@@ -14,6 +14,7 @@ import {
   ExplorerLink,
 } from '../cluster/cluster-ui';
 import toast, { Toaster } from 'react-hot-toast';
+// import { bg_img } from "../../public/bg_Article.jpg";
 
 export function UiLayout({
   children,
@@ -29,7 +30,7 @@ export function UiLayout({
       <div className="navbar bg-base-300 text-neutral-content flex-col md:flex-row space-y-2 md:space-y-0">
         <div className="flex-1">
           <Link className="btn btn-ghost normal-case text-xl" href="/">
-            <img className="h-4 md:h-6" alt="Logo" src="/logo.png" />
+           <p>Gluon</p>
           </Link>
           <ul className="menu menu-horizontal px-1 space-x-2">
             {links.map(({ label, path }) => (
@@ -147,7 +148,8 @@ export function AppHero({
   subtitle: ReactNode;
 }) {
   return (
-    <div className="hero py-[64px]">
+    <div className="hero p-8 py-[64px]  rounded-lg bg-[url(/public/bg_Article.jpeg)]">
+      {/* Add image as background here */}
       <div className="hero-content w-full text-center">
         <div className="max-w-1/2">
           {typeof title === 'string' ? (
